@@ -1,29 +1,35 @@
 package lzw
 
 import (
-	"strconv"
-	"strings"
 	"io/ioutil"
 	"os"
 )
 
 
 func Compress(pathToInFile string, pathToOutFile string) {
-	var strSlice []string
-	for _, item := range compress(initMapWithLettersAndCodes(1, 129), readFile(pathToInFile)) {
-		strSlice = append(strSlice, strconv.Itoa(item))
+	outFile, _:= os.OpenFile(pathToOutFile, os.O_CREATE|os.O_RDWR, 0666)
+	defer outFile.Close()
+	strings := readUncompressedFile(pathToInFile)
+	dict := initMapWithLettersAndCodes(1, 129)
+	println(len(strings))
+	for _, str := range strings {
+		writeByteSliceToFile(outFile, compress(dict, str))
 	}
-	writeFile(strings.Join(strSlice, " "), pathToOutFile)
 }
 
 
 func Decompress(pathToInFile string, pathToOutFile string) {
-	var res []int
-	for _, j := range strings.Split(readFile(pathToInFile), " ") {
-		i, _ := strconv.Atoi(j)
-		res = append(res, i)
+	outFile, _:= os.OpenFile(pathToOutFile, os.O_CREATE|os.O_RDWR, 0666)
+	defer outFile.Close()
+	compressed := readByteSliceFromFile(pathToInFile)
+	println(len(compressed))
+	dict := reverseMap(initMapWithLettersAndCodes(1, 129))
+	for i, byteSlice := range compressed {
+		dec := decompress(dict, byteSlice)
+		print("operation: "); println(i)
+		outFile.WriteString(dec)
+		outFile.Sync()
 	}
-	writeFile(decompress(initMapWithLettersAndCodes(1, 129), res), pathToOutFile)
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -43,26 +49,19 @@ func compress(lzwMap map[string]int, uncompressedString string) []int {
 }
 
 
-func decompress(lzwMap map[string]int, compressedString []int) string {
-	var (beforeCode int = compressedString[0]; result string = getKeyFromMap(beforeCode, lzwMap))
-	for _, nextCode := range compressedString[1:] {
-		key := getKeyFromMap(nextCode, lzwMap)
-		key, result = decompressUpdateResult(key, result, beforeCode, lzwMap)
-		lzwMap[getKeyFromMap(beforeCode, lzwMap) + string(key[0])] = len(lzwMap)
-		beforeCode = nextCode
+func decompress(lzwMap map[int]string, compressed []int) string {
+	dictSize := 128
+	w := string(compressed[0])
+	result := w
+	for _, k := range compressed[1:] {
+		var entry string
+		if x, ok := lzwMap[k]; ok { entry = x } else if k == dictSize { entry = w + w[:1] }
+		result += entry
+		lzwMap[dictSize] = w + entry[:1]
+		dictSize++
+		w = entry
 	}
 	return result
-}
-
-
-func decompressUpdateResult(key string, result string, beforeCode int, lzwMap map[string]int) (string, string) {
-	if key != "" {
-		result += key
-	} else {
-		key = getKeyFromMap(beforeCode, lzwMap)
-		result += key + string(key[0])
-	}
-	return key, result
 }
 
 
@@ -75,33 +74,73 @@ func initMapWithLettersAndCodes(from int, to int) map[string]int {
 }
 
 
-func getKeyFromMap(code int, lzwMap map[string]int) string {
-	for key, value := range lzwMap {
-		if value == code {
-			return key
-		}
-	}
-	return ""
+func reverseMap(m map[string]int) map[int]string {
+	n := make(map[int]string)
+	for k, v := range m { n[v] = k }
+	return n
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-func readFile(filePath string) string {
-	readString, err := ioutil.ReadFile(filePath)
-	if err != nil {
-		os.Exit(1)
-	}
-	return string(readString)
+const (
+	maxChunkSize = 2000000
+)
+
+func readUncompressedFile(pathToFile string) []string {
+	buffer, _ := ioutil.ReadFile(pathToFile)
+	return separateInSeveralStreamsByStringSize(buffer, maxChunkSize)
 }
 
-
-func writeFile(values string, filePath string) error {
-	file, err := os.Create(filePath)
-	if err != nil {
-		return err
+func separateInSeveralStreamsByStringSize(buffer []byte, maxStringSize int) []string {
+	var chunks []string
+	for offset := 0; offset < len(buffer); offset += maxStringSize {
+		if len(buffer)-offset < maxStringSize {
+			chunks = append(chunks, string(buffer[offset:]))
+		} else {
+			chunks = append(chunks, string(buffer[offset:(maxChunkSize + offset)]))
+		}
 	}
-	file.WriteString(values)
-	defer file.Close()
+	return chunks
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+func readByteSliceFromFile(pathToFile string) [][]int {
+	buffer, _ := ioutil.ReadFile(pathToFile)
+	var (
+		slice []int
+		slices [][]int
+		currentInt int
+		currentBitCount uint8 = 0
+	)
+
+	for _, currentByte := range buffer {
+		if currentByte == 0 {
+			slices = append(slices, slice)
+			slice = []int{}
+		} else {
+			currentInt = currentInt | (int(currentByte & 127) << currentBitCount)
+			if currentByte & 128 == 0 {
+				slice = append(slice, currentInt)
+				currentInt = 0
+				currentBitCount = 0
+			} else {
+				currentBitCount += 7
+			}
+		}
+	}
+	return slices
+}
+
+func writeByteSliceToFile(file *os.File, byteSlice []int) {
+	b := []byte{0}
+	for _, it := range byteSlice {
+		tmp := it
+		for ; tmp != 0; tmp = tmp >> 7 {
+			if tmp > 127 { b[0] = uint8(tmp & 127 | 128) } else { b[0] = uint8(tmp)}
+			file.Write(b)
+		}
+	}
+	file.Write([]byte{0})
 	file.Sync()
-	return nil
 }

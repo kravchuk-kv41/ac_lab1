@@ -5,30 +5,30 @@ import (
 	"strings"
 	"bufio"
 	"lzw"
+	"time"
+	"fmt"
 )
 
 
 func main() {
 	io := bufio.NewReader(os.Stdin)
-	for  {
+	for {
 		print("1 -- compress\n2 -- decompress\n> ")
-		code, err := io.ReadString('\n')
-		code = strings.Trim(code, "\n")
-		if err != nil {
-			panic(err)
-		}
+		code := read(io)
 		print("Enter file IN > ")
-		filePathIn := getFilePath(*io)
+		filePathIn := read(io)
 		print("Enter file OUT > ")
-		filePathOut := getFilePath(*io)
+		filePathOut := read(io)
 		if code == "1" {
+			Timestamp()
 			lzw.Compress(filePathIn, filePathOut)
-			println("compression completed successfully")
+			Stamp("compression completed successfully")
 			os.Exit(0)
 		}
 		if code == "2" {
+			Timestamp()
 			lzw.Decompress(filePathIn, filePathOut)
-			println("decompression completed successfully")
+			Stamp("decompression completed successfully")
 			os.Exit(0)
 		}
 		println("Enter correct command")
@@ -36,9 +36,18 @@ func main() {
 
 }
 
+func read(io *bufio.Reader) string {
+	code, _ := io.ReadString('\n')
+	code = strings.Trim(code, "\n")
+	return code
+}
 
-func getFilePath(io bufio.Reader) string {
-	filePath, _ := io.ReadString('\n')
-	filePath = strings.Trim(filePath, "\n")
-	return filePath
+var timestamp int64
+
+func Timestamp() {
+	timestamp = time.Now().Unix()
+}
+
+func Stamp(str string) {
+	fmt.Printf("%s: %d\n", str, time.Now().Unix() - timestamp)
 }
