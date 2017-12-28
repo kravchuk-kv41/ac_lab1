@@ -11,11 +11,7 @@ import (
 )
 
 const (
-<<<<<<< HEAD
 	PATH_TO_ATTACHMENTS = "/home/kate/GolangProjects/lzw/files/"
-=======
-	PATH_TO_ATTACHMENTS = "/home/sergey/Projects/Golang/LzwCompressor/attachments/"
->>>>>>> 0eb29af9d427e7bdd2593d744ac0360a1d143141
 	TEST_FILE_NAME_C_IN   = "test_in.txt"
 	TEST_FILE_NAME_C_OUT  = "test_out.lzw"
 	TEST_FILE_NAME_D_IN   = "test_out.lzw"
